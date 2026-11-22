@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>One-Prompt Snake</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  html, body { margin: 0; padding: 0; background: #0d1117; height: 100%;
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif; color: #e6edf3; }
+  .wrap { display: flex; flex-direction: column; align-items: center;
+    justify-content: center; min-height: 100vh; gap: 10px; }
+  h1 { margin: 0; font-size: 28px; letter-spacing: 1px; }
+  h1 span { color: #3fb950; }
+  .bar { display: flex; gap: 24px; font-size: 18px; }
+  .bar b { color: #f0b429; }
+  canvas { background: #161b22; border: 3px solid #30363d; border-radius: 12px;
+    box-shadow: 0 0 40px rgba(63, 185, 80, .25); }
+  .hint { color: #8b949e; font-size: 14px; }
+  .over { position: absolute; inset: 0; display: none; align-items: center;
+    justify-content: center; flex-direction: column; background: rgba(13,17,23,.82);
+    border-radius: 12px; }
+  .over.show { display: flex; }
+  .over h2 { margin: 0 0 8px; font-size: 34px; color: #f85149; }
+  .over p { margin: 4px 0; font-size: 18px; }
+  .stage { position: relative; }
+  button { margin-top: 10px; padding: 10px 22px; font-size: 16px; cursor: pointer;
+    background: #238636; color: #fff; border: 0; border-radius: 8px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>ONE-PROMPT <span>SNAKE</span></h1>
+  <div class="bar"><span>Score <b id="score">0</b></span><span>Best <b id="best">0</b></span><span>Length <b id="len">3</b></span></div>
+  <div class="stage">
+    <canvas id="game" width="640" height="400"></canvas>
+    <div class="over" id="over">
+      <h2>GAME OVER</h2>
+      <p>Final score: <b id="final">0</b></p>
+      <button id="again">Play again (Enter)</button>
+    </div>
+  </div>
+  <div class="hint">Steer with arrow keys or WASD &middot; eat the dots &middot; don't hit the walls or yourself</div>
+</div>
+<script>
+(function () {
+  'use strict';
+  var CELL = 20, COLS = 32, ROWS = 20;
+  var canvas = document.getElementById('game');
+  var ctx = canvas.getContext('2d');
+  var scoreEl = document.getElementById('score');
+  var bestEl = document.getElementById('best');
+  var lenEl = document.getElementById('len');
+  var overEl = document.getElementById('over');
+  var finalEl = document.getElementById('final');
+  var auto = new URLSearchParams(location.search).get('auto') === '1';
+  var seedParam = new URLSearchParams(location.search).get('seed');
+  var rngState = seedParam === null ? (Math.random() * 0xffffffff) >>> 0 : parseInt(seedParam, 10) >>> 0;
+  // mulberry32: deterministic food placement when ?seed= is given, so a
+  // screen recording can be replayed frame by frame.
+  function rng() {
+    rngState = (rngState + 0x6D2B79F5) >>> 0;
+    var t = rngState;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  }
+
+  var snake, dir, pending, food, score, best, alive, speed, timer;
+  best = 0;
+
+  function randCell() {
+    return { x: Math.floor(rng() * COLS), y: Math.floor(rng() * ROWS) };
+  }
+  function placeFood() {
+    var p;
+    do { p = randCell(); } while (snake.some(function (s) { return s.x === p.x && s.y === p.y; }));
+    food = p;
+  }
+  function reset() {
+    snake = [{ x: 8, y: 10 }, { x: 7, y: 10 }, { x: 6, y: 10 }];
+    dir = { x: 1, y: 0 }; pending = dir;
+    score = 0; alive = true; speed = 130;
+    overEl.classList.remove('show');
+    placeFood(); draw(); updateHud();
+    clearInterval(timer);
+    timer = setInterval(tick, speed);
+  }
+  function updateHud() {
+    scoreEl.textContent = score;
+    bestEl.textContent = best;
+    lenEl.textContent = snake.length;
+  }
+  function draw() {
+    ctx.fillStyle = '#161b22';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.strokeStyle = '#21262d'; ctx.lineWidth = 1;
+    for (var gx = 0; gx <= COLS; gx++) {
+      ctx.beginPath(); ctx.moveTo(gx * CELL, 0); ctx.lineTo(gx * CELL, ROWS * CELL); ctx.stroke();
+    }
+    for (var gy = 0; gy <= ROWS; gy++) {
+      ctx.beginPath(); ctx.moveTo(0, gy * CELL); ctx.lineTo(COLS * CELL, gy * CELL); ctx.stroke();
+    }
+    ctx.fillStyle = '#f0b429';
+    ctx.beginPath();
+    ctx.arc(food.x * CELL + CELL / 2, food.y * CELL + CELL / 2, CELL / 2 - 2, 0, Math.PI * 2);
+    ctx.fill();
+    snake.forEach(function (seg, i) {
+      ctx.fillStyle = i === 0 ? '#3fb950' : '#2da44e';
+      var r = i === 0 ? 9 : 8;
+      ctx.beginPath();
+      ctx.arc(seg.x * CELL + CELL / 2, seg.y * CELL + CELL / 2, r, 0, Math.PI * 2);
+      ctx.fill();
+    });
+  }
+  function autoSteer() {
+    var head = snake[0];
+    var dx = food.x - head.x, dy = food.y - head.y;
+    var options = [];
+    if (Math.abs(dx) >= Math.abs(dy)) {
+      options.push({ x: Math.sign(dx), y: 0 }, { x: 0, y: Math.sign(dy) });
+    } else {
+      options.push({ x: 0, y: Math.sign(dy) }, { x: Math.sign(dx), y: 0 });
+    }
+    options.push({ x: 0, y: 1 }, { x: 1, y: 0 }, { x: 0, y: -1 }, { x: -1, y: 0 });
+    for (var i = 0; i < options.length; i++) {
+      var d = options[i];
+      if (d.x === -dir.x && d.y === -dir.y) continue;
+      var nx = head.x + d.x, ny = head.y + d.y;
+      if (nx < 0 || ny < 0 || nx >= COLS || ny >= ROWS) continue;
+      if (snake.some(function (s, j) { return j < snake.length - 1 && s.x === nx && s.y === ny; })) continue;
+      pending = d; return;
+    }
+  }
+  function tick() {
+    if (!alive) return;
+    if (auto) autoSteer();
+    dir = pending;
+    var head = { x: snake[0].x + dir.x, y: snake[0].y + dir.y };
+    if (head.x < 0 || head.y < 0 || head.x >= COLS || head.y >= ROWS ||
+        snake.some(function (s) { return s.x === head.x && s.y === head.y; })) {
+      alive = false;
+      clearInterval(timer);
+      if (score > best) best = score;
+      finalEl.textContent = score;
+      overEl.classList.add('show');
+      updateHud();
+      return;
+    }
+    snake.unshift(head);
+    if (head.x === food.x && head.y === food.y) {
+      score += 10;
+      if (speed > 70) { speed -= 4; clearInterval(timer); timer = setInterval(tick, speed); }
+      placeFood();
+    } else {
+      snake.pop();
+    }
+    draw(); updateHud();
+  }
+  var KEYS = { ArrowUp: { x: 0, y: -1 }, ArrowDown: { x: 0, y: 1 },
+    ArrowLeft: { x: -1, y: 0 }, ArrowRight: { x: 1, y: 0 },
+    w: { x: 0, y: -1 }, s: { x: 0, y: 1 }, a: { x: -1, y: 0 }, d: { x: 1, y: 0 } };
+  document.addEventListener('keydown', function (e) {
+    var d = KEYS[e.key];
+    if (d) {
+      if (!(d.x === -dir.x && d.y === -dir.y)) pending = d;
+      e.preventDefault();
+    }
+    if (e.key === 'Enter' && !alive) reset();
+  });
+  document.getElementById('again').addEventListener('click', reset);
+  reset();
+})();
+</script>
+</body>
+</html>
