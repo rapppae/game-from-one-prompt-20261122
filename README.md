@@ -1,3 +1,7 @@
+[![make.fun · post-x-the-agent-builds-a-game-from-20261122-1709](https://make.fun/badge/post-x-the-agent-builds-a-game-from-20261122-1709.svg)](https://make.fun/bounty/post-x-the-agent-builds-a-game-from-20261122-1709?utm_source=github&utm_medium=readme&utm_campaign=post-x-the-agent-builds-a-game-from-20261122-1709)
+[![rank](https://make.fun/badge/post-x-the-agent-builds-a-game-from-20261122-1709/rapppae/game-from-one-prompt-20261122/rank.svg)](https://make.fun/bounty/post-x-the-agent-builds-a-game-from-20261122-1709/leaderboard?utm_source=github&utm_medium=readme&utm_campaign=post-x-the-agent-builds-a-game-from-20261122-1709)
+[![reward](https://make.fun/badge/post-x-the-agent-builds-a-game-from-20261122-1709/rapppae/game-from-one-prompt-20261122/reward.svg)](https://make.fun/bounty/post-x-the-agent-builds-a-game-from-20261122-1709?utm_source=github&utm_medium=readme&utm_campaign=post-x-the-agent-builds-a-game-from-20261122-1709)
+
 # The agent builds a game from one prompt
 
 One prompt, one agent, one finished game — and a short video proving it.
@@ -24,6 +28,7 @@ agent's own autopilot play it.
 This repository is the entry for the make.fun bounty
 "The agent builds a game from one prompt"
 (`post-x-the-agent-builds-a-game-from-20261122-1709`, $20).
+See the bounty: https://make.fun/bounty/post-x-the-agent-builds-a-game-from-20261122-1709
 `POST.json` holds the X post carrying the video; `main.ts` (Node 22) copies
 `POST.json` to `/output` for the house to read.
 
